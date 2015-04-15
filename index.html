@@ -1,0 +1,165 @@
+<html>
+<body>
+</body>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+<script type="text/javascript">
+(function(g) {
+	var defaultOptions = {
+		datafile: "maze.txt"
+	};
+
+	function constructRobot(maze, data) {
+		data = fillRows(data.replace("\r", "").split("\n"));
+		var grid = toBoolean(data);
+		var rows = grid.length;
+		var columns = grid.length > 0 ? grid[0].length : 0;
+		var pos = findRobot(data);
+		var facing = { x: -1, y: 0 };
+		var tokens = {};
+
+		function getMaze() {
+			return maze;
+		}
+
+		function inMaze(x, y) {
+			if (x === undefined) x = pos.x;
+			if (y === undefined) y = pos.y;
+			return x >= 0 && x < rows && y >= 0 && y < columns; 
+		}
+
+		function rotateLeft() {
+			var px = facing.x;
+			var py = facing.y;
+			facing.x = px ? 0 : py;
+			facing.y = py ? 0 : -px;
+		}
+
+		function rotateRight() {
+			var px = facing.x;
+			var py = facing.y;
+			facing.x = px ? 0 : -py;
+			facing.y = py ? 0 : px;
+		}
+
+		function isClearAhead() {
+			var newx = pos.x + facing.x;
+			var newy = pos.y + facing.y;
+			return !(inMaze(newx, newy) && grid[newx][newy]);
+		}
+
+		function positionString() {
+			return inMaze() ? "-" : (pos.x + "," + pos.y);
+		}
+
+		function getToken() {
+			return tokens[positionString()];
+		}
+
+		function putToken(token) {
+			tokens[positionString()] = token;
+		}
+
+		return {
+			getMaze: getMaze,
+			inMaze: inMaze,
+			rotateLeft: rotateLeft,
+			rotateRight: rotateRight,
+			isClearAhead: isClearAhead,
+			getToken: getToken,
+			putToken: putToken
+		};
+	}
+
+	var Maze = function(options) {
+		this.options = $.extend({}, defaultOptions, options);
+		this.size = 0;
+	};
+	Maze.prototype = {
+		getDataFile: function() {
+			return this.options.datafile;
+		},
+		getSize: function() {
+			return this.size;
+		},
+		init: function() {
+			var self = this;
+			return $.ajax(this.options.datafile, {
+				method: "GET",
+				dataType: "text",
+				dataFilter: function(data) {
+					constructRobot(self, data);
+				}
+			});
+		}
+	};
+
+	g.Maze = Maze;
+})(window);
+</script>
+<script type="text/javascript">
+(function(g) {
+	var ControlModule = function(robot) {
+		this.robot = robot;
+	};
+	ControlModule.prototype = {
+		step: function() {
+		}
+	};
+	g.ControlModule = ControlModule;
+})(window);
+</script>
+<script type="text/javascript">
+$(function() {
+	function runControlModule(maze, robot) {
+		var controlModule = new ControlModule(robot);
+		for (;;) {
+			if (!robot.inMaze()) {
+				$("body").append($("<p>").text("Escaped!"));
+				break;
+			}
+			try {
+				controlModule.step();
+				$("body").append($("<p>").text("Hey, your robot stopped."));
+				break;
+			}
+			catch (t) {
+				if (!t.longjmp) {
+					$("body").append($("<p>").text("Unexpected error (see console)."));
+					console.log(t);
+					break;
+				}
+				if (t.quit) {
+					$("body").append($("<p>").text("Gave up!"));
+					break;
+				}
+			}
+			if (++stepCount > 2*maze.getSize()) {
+				$("body").append($("<p>").text("That thing is running in circles.  Aborting."));
+				break;
+			}
+		}
+		$("body").append($("<p>").text("history: " + robot.getHistory()));
+	}
+
+	function handleMazeError(maze, errorMsg) {
+		$("body").append($("<p>").text("error initializing " + maze.getDataFile()));
+	}
+
+	function run(options)
+	{
+		var maze = new Maze(options);
+		$("body").append($("<p>").text("loading " + maze.getDataFile() + "...") );
+		maze.init()
+			.success(function(data) { runControlModule(maze, data); })
+			.error(function(x, errorMessage) { handleMazeError(maze, errorMessage); });
+	}
+
+	if (window.location.hash) {
+		run({ datafile: window.location.hash.substring(1) });
+	}
+	else {
+		run();
+	}
+});
+</script>
+</html>
