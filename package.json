@@ -1,0 +1,27 @@
+{
+  "name": "little-lost-robot",
+  "version": "1.0.0",
+  "description": "Help the robot find its way out of the maze",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EchNet/little-lost-robot.git"
+  },
+  "keywords": [
+    "programming",
+    "challenge",
+    "javascript"
+  ],
+  "author": "James Echmalian",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/EchNet/little-lost-robot/issues"
+  },
+  "homepage": "https://github.com/EchNet/little-lost-robot",
+  "dependencies": {
+    "express": "^4.12.3"
+  }
+}

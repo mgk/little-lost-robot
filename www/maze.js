@@ -11,6 +11,13 @@
 		datafile: "maze.txt"
 	};
 
+	function trimEmpty(strings) {
+		while (strings.length > 0 && strings[strings.length - 1].trim() == ""){
+			strings = strings.slice(0, strings.length - 1);
+		}
+		return strings;
+	}
+
 	function maxStrLen(strings) {
 		var max = 0;
 		for (var i = 0; i < strings.length; ++i) {
@@ -35,14 +42,14 @@
 		for (var i = 0; i < strings.length; ++i) {
 			bools[i] = [];
 			for (var j = 0; j < length; ++j) {
-				bools[j] = j < strings[i].length && strings[i].charAt(j) != ' ';
+				bools[i][j] = j < strings[i].length && strings[i].charAt(j) != ' ';
 			}
 		}
 		return bools;
 	}
 
 	function reset(maze, data) {
-		var rowStrings = data.split(/[\n\r]+/);
+		var rowStrings = trimEmpty(data.split(/[\n\r]+/));
 		var ncolumns = maxStrLen(rowStrings);
 		var startingPos = extractRobot(rowStrings);
 		var grid = toBooleans(rowStrings, ncolumns);
@@ -67,11 +74,11 @@
 		if (!isWithin(maze, x, y)) {
 			return undefined;
 		}
-		if (maze.grid[x][y]) {
-			return "wall";
-		}
-		var token = maze.tokens[positionString(maze, x, y)];
-		return " " + (token ? token : "");
+		return {
+			blocked: maze.grid[x][y],
+			robot: x == maze.pos.x && y == maze.pos.y,
+			token: maze.tokens[positionString(maze, x, y)]
+		};
 	}
 
 	function registerChangeListener(maze, listener) {
