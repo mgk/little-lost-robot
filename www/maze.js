@@ -70,13 +70,17 @@
 		return !isWithin(maze, x, y) ? "-" : (x + "," + y);
 	}
 
+	function robotIsAt(maze, x, y) {
+		return x == maze.pos.x && y == maze.pos.y;
+	}
+
 	function whatsAt(maze, x, y) {
 		if (!isWithin(maze, x, y)) {
 			return undefined;
 		}
 		return {
 			blocked: maze.grid[x][y],
-			robot: x == maze.pos.x && y == maze.pos.y,
+			robot: robotIsAt(maze, x, y) ? $.extend({}, maze.facing) : undefined,
 			token: maze.tokens[positionString(maze, x, y)]
 		};
 	}
@@ -146,6 +150,17 @@
 		};
 	}
 
+	function createCopy(maze) {
+		var maze2 = new Maze(maze.options);
+		maze2.grid = maze.grid;
+		maze2.ncolumns = maze.ncolumns;
+		maze2.startingPos = maze.startingPos;
+		maze2.facing = $.extend({}, maze.facing);
+		maze2.tokens = $.extend({}, maze.tokens);
+		maze2.pos = $.extend({}, maze.pos);
+		return maze2;
+	}
+
 	var Maze = function(options) {
 		this.options = $.extend({}, defaultOptions, options);
 		this.facing = {};
@@ -179,6 +194,9 @@
 		},
 		getRobot: function() {
 			return createRobot(this);
+		},
+		copy: function() {
+			return createCopy(this);
 		}
 	};
 
