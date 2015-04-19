@@ -105,27 +105,32 @@
 				var x = maze.pos.x + maze.facing.x;
 				var y = maze.pos.y + maze.facing.y;
 				if (!isWithin(maze, x, y)) {
-					return true;
+					return {};
 				}
 				if (maze.grid[x][y]) {
 					return false;
 				}
-				return maze.tokens[positionString(maze, x, y)];
+				return {
+                    token: maze.tokens[positionString(maze, x, y)]
+                };
 			},
 
-			rotateLeft: function() {
+            _doRot: function() {
 				var x = maze.facing.x;
 				var y = maze.facing.y;
 				maze.facing.x = x ? 0 : y;
-				maze.facing.y = y ? 0 : -x;
+				maze.facing.y = y ? 0 : x;
+            },
+
+			rotateLeft: function() {
+                this._doRot();
 				fireChangeEvent(maze);
 			},
 
 			rotateRight: function() {
-				var x = maze.facing.x;
-				var y = maze.facing.y;
-				maze.facing.x = x ? 0 : -y;
-				maze.facing.y = y ? 0 : x;
+                this._doRot();
+				maze.facing.x *= -1;
+				maze.facing.y *= -1;
 				fireChangeEvent(maze);
 			},
 
@@ -144,9 +149,13 @@
 			},
 
 			dropToken: function(token) {
-				maze.tokens[positionString(maze, x, y)] = token;
+				maze.tokens[positionString(maze, maze.pos.x, maze.pos.y)] = token;
 				fireChangeEvent(maze);
-			}
+			},
+
+            getToken: function() {
+				return maze.tokens[positionString(maze, maze.pos.x, maze.pos.y)];
+            }
 		};
 	}
 
