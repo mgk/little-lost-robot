@@ -2,37 +2,42 @@
 // mazeui.js
 //
 (function(g, $) {
-	var TICK = 100;
+	var TICK = 80;
+	var CELLSIZE = 15;
 
 	function MazeUI(options) {
 		var mazeui = this;
 		var maze = new Maze(options);
 		var stepCount;
 		var size;
-		var renderQueue = [];
-		var lastRenderTime;
-		var renderTimer;
+		var robot;
 
 		function renderGrid(maze) {
-			var table = $("<table>").attr({
-				cellpadding: 0,
-				cellspacing: 0
-			});
 			var dimensions = maze.getDimensions();
+			var table = $("<div>").css({
+				margin: 0,
+				padding: 0,
+				width: dimensions.columns * CELLSIZE,
+				height: dimensions.rows * CELLSIZE
+			});
 			for (var x = 0; x < dimensions.rows; ++x) {
-				var row = $("<tr>").css({
-					border: "none"
+				var row = $("<div>").attr("class", "tr").css({
+					margin: 0,
+					padding: 0,
+					width: dimensions.columns * CELLSIZE,
+					height: CELLSIZE
 				});
 				for (var y = 0; y < dimensions.columns; ++y) {
-					var block = $("<td>").css({
-						width: "20px",
-						height: "20px",
+					var block = $("<div>").attr("class", "td").css({
+						width: CELLSIZE,
+						height: CELLSIZE,
 						border: 0,
+						float: "left",
 						overflow: "none",
-						padding: "2px",
+						padding: 0,
 						margin: 0,
 						textAlign: "center",
-						fontSize: "10px",
+						fontSize: 10,
 						color: "#ccc",
 						backgroundColor: maze.whatsAt(x, y).blocked ? "#333" : "#eee"
 					});
@@ -57,11 +62,15 @@
 			}).text(robotChar);
 		}
 
+		function print(str) {
+			mazeui.append($("<p>").text(str));
+		}
+
 		function renderContents(maze) {
-			var rows = mazeui.find("tr");
+			var rows = mazeui.find(".tr");
 			var dimensions = maze.getDimensions();
 			for (var x = 0; x < dimensions.rows; ++x) {
-				var blocks = $(rows[x]).find("td");
+				var blocks = $(rows[x]).find(".td");
 				for (var y = 0; y < dimensions.columns; ++y) {
 					var block = $(blocks[y]);
 					block.empty();
@@ -69,57 +78,69 @@
 					if (stuff.robot) {
 						block.append(makeRobotDisplay(stuff.robot));
 					}
-					else if (stuff.token) {
+					else if (stuff.token !== undefined) {
 						block.text(stuff.token);
 					}
 				}
 			}
-			lastRenderTime = new Date().getTime();
 		}
 
-		function scheduleNextRender() {
-			renderTimer = setTimeout(renderNow, TICK);
-		}
-
-		function renderNow() {
-			if (renderQueue.length) {
-				renderContents(renderQueue.shift());
-			}
-			renderTimer = null;
-			if (renderQueue.length) {
-				scheduleNextRender();
-			}
-		}
-
-		function triggerRender() {
-			if (new Date().getTime() - lastRenderTime >= TICK) {
-				renderContents(maze);
-			}
-			else {
-				renderQueue.push(maze.copy());
-				if (!renderTimer) {
-					scheduleNextRender();
+		function step(controlModule) {
+			if (robot.status == Maze.ROBOT_OK) {
+				if (!robot.inMaze()) {
+					print("Escaped!");
+				}
+				else if (stepCount > 3*size) {
+					print("That thing is running in circles.  Abort.");
+				}
+				else {
+					//try {
+						controlModule.step();
+						++stepCount;
+						renderContents(maze);
+						if (robot.status == Maze.ROBOT_QUIT) {
+							print("Robot declares that there is no solution.");
+						}
+						else {
+							setTimeout(function() { stepUp(controlModule); }, TICK);
+						}
+						/***
+					}
+					catch (e) {
+						print("Unexpected error (see console).");
+						robot.status = Maze.ROBOT_SMASHED;
+						console.log(e);
+						return;
+					}
+					***/
 				}
 			}
 		}
 
+		function stepUp(controlModule)
+		{
+			robot.move();
+			renderContents(maze);
+			if (robot.status == Maze.ROBOT_SMASHED) {
+				print("Smashed!  This ControlModule sucks!");
+			}
+			else {
+				setTimeout(function() { step(controlModule); }, TICK);
+			}
+		}
+
 		function go() {
-			var robot = maze.getRobot();
-			var controlModule = new ControlModule(robot);
-			var results;
 			stepCount = 0;
-			try {
-				controlModule.go();
-				results = robot.inMaze() ? "Oh, well." : "Escaped!";
+			if (!robot.inMaze()) {
+				print("Hey, there is no robot start position in this maze!");
 			}
-			catch (e) {
-				results = "Unexpected error (see console).";
-				console.log(e);
+			else {
+				step(new ControlModule(robot.getControls()));
 			}
-			mazeui.append($("<p>").text(results));
 		}
 
 		function handleLoad() {
+			robot = maze.getRobot();
 			var dimensions = maze.getDimensions();
 			size = dimensions.rows * dimensions.columns;
 			renderGrid(maze);
@@ -132,13 +153,6 @@
 		}
 
 		mazeui.append($("<p>").text("loading " + maze.getTitle() + "...") );
-
-		maze.registerChangeListener(function() {
-			if (++stepCount > 3*size) {
-				throw "That thing is running in circles.  Abort.";
-			}
-			triggerRender();
-		});
 
 		maze.load()
 			.success(handleLoad)

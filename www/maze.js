@@ -3,9 +3,9 @@
 //
 (function(g, $) {
 
-	//
-	// class Maze
-	//
+	var ROBOT_OK = 0;
+	var ROBOT_SMASHED = 1;
+	var ROBOT_QUIT = 2;
 
 	var defaultOptions = {
 		datafile: "maze.txt"
@@ -26,7 +26,7 @@
 		return max;
 	}
 
-	function extractRobot(rowStrings) {
+	function findAndRemoveStartMarker(rowStrings) {
 		for (var i = 0; i < rowStrings.length; ++i) {
 			var m = rowStrings[i].match(/^(.*)\^/);
 			if (m) {
@@ -48,134 +48,150 @@
 		return bools;
 	}
 
-	function reset(maze, data) {
-		var rowStrings = trimEmpty(data.split(/[\n\r]+/));
-		var ncolumns = maxStrLen(rowStrings);
-		var startingPos = extractRobot(rowStrings);
-		var grid = toBooleans(rowStrings, ncolumns);
-
-		maze.grid = grid;
-		maze.ncolumns = ncolumns;
-		maze.startingPos = startingPos;
-		maze.facing = { x: -1, y: 0 };
-		maze.tokens = {};
-		maze.pos = $.extend({}, maze.startingPos);
+	function loadMaze(maze) {
+		return $.ajax(maze.options.datafile, {
+			method: "GET",
+			dataType: "text",
+			dataFilter: function(data) {
+				var rowStrings = trimEmpty(data.split(/[\n\r]+/));
+				var ncolumns = maxStrLen(rowStrings);
+				maze.startingPos = findAndRemoveStartMarker(rowStrings);
+				maze.grid = toBooleans(rowStrings, ncolumns);
+				maze.ncolumns = ncolumns;
+				return maze;
+			}
+		});
 	}
 
 	function isWithin(maze, x, y) {
 		return x >= 0 && x < maze.grid.length && y >= 0 && y < maze.ncolumns; 
 	}
 
+	function isWall(maze, x, y) {
+		return isWithin(maze, x, y) && maze.grid[x][y];
+	}
+
 	function positionString(maze, x, y) {
 		return !isWithin(maze, x, y) ? "-" : (x + "," + y);
 	}
 
+	function putToken(maze, x, y, token) {
+		maze.tokens[positionString(maze, x, y)] = token;
+	}
+
+	function getToken(maze, x, y) {
+		return maze.tokens[positionString(maze, x, y)];
+	}
+
 	function robotIsAt(maze, x, y) {
-		return x == maze.pos.x && y == maze.pos.y;
+		return maze.robot && x == maze.robot.pos.x && y == maze.robot.pos.y;
 	}
 
 	function whatsAt(maze, x, y) {
 		if (!isWithin(maze, x, y)) {
-			return undefined;
+			return null;
 		}
 		return {
 			blocked: maze.grid[x][y],
-			robot: robotIsAt(maze, x, y) ? $.extend({}, maze.facing) : undefined,
-			token: maze.tokens[positionString(maze, x, y)]
+			robot: robotIsAt(maze, x, y) ? $.extend({}, maze.robot.facing) : undefined,
+			token: getToken(maze, x, y)
 		};
 	}
 
-	function registerChangeListener(maze, listener) {
-		maze.listeners.push(listener);
+	function robotFacingWall(robot) {
+		return isWall(
+			robot.maze,
+			robot.pos.x + robot.facing.x,
+			robot.pos.y + robot.facing.y);
 	}
 
-	function fireChangeEvent(maze) {
-		for (var i = 0; i < maze.listeners.length; ++i) {
-			maze.listeners[i].call();
+	function moveRobot(robot) {
+		if (robot.status == ROBOT_OK) {
+			if (robotFacingWall(robot)) {
+				robot.status = ROBOT_SMASHED;
+			}
+			else {
+				robot.pos.x += robot.facing.x;
+				robot.pos.y += robot.facing.y;
+			}
 		}
 	}
 
-	function createRobot(maze) {
-		return {
-			inMaze: function() {
-				return isWithin(maze, maze.pos.x, maze.pos.y);
-			},
-
-			lookAhead: function() {
-				var x = maze.pos.x + maze.facing.x;
-				var y = maze.pos.y + maze.facing.y;
-				if (!isWithin(maze, x, y)) {
-					return {};
-				}
-				if (maze.grid[x][y]) {
-					return false;
-				}
-				return { 
-					token: maze.tokens[positionString(maze, x, y)]
-				};
-			},
-
-            _doRot: function() {
-				var x = maze.facing.x;
-				var y = maze.facing.y;
-				maze.facing.x = x ? 0 : y;
-				maze.facing.y = y ? 0 : x;
-            },
-
-			rotateLeft: function() {
-                this._doRot();
-				fireChangeEvent(maze);
-			},
-
-			rotateRight: function() {
-                this._doRot();
-				maze.facing.x *= -1;
-				maze.facing.y *= -1;
-				fireChangeEvent(maze);
-			},
-
-			move: function() {
-				if (!isWithin(maze, maze.pos.x, maze.pos.y)) {
-					throw "already outside maze";
-				}
-				var x = maze.pos.x + maze.facing.x;
-				var y = maze.pos.y + maze.facing.y;
-				if (maze.grid[x][y]) {
-					throw "blocked";
-				}
-				maze.pos.x = x;
-				maze.pos.y = y;
-				fireChangeEvent(maze);
-			},
-
-			dropToken: function(token) {
-				maze.tokens[positionString(maze, maze.pos.x, maze.pos.y)] = token;
-				fireChangeEvent(maze);
-			},
-
-			getToken: function() {
-				return maze.tokens[positionString(maze, maze.pos.x, maze.pos.y)];
+	function rotateRobot(robot, turns) {
+		var x = robot.facing.x;
+		var y = robot.facing.y;
+		// Normalize angle to 4 possibilities.
+		if (turns < 0) {
+			turns *= -1;
+			if (turns % 2 != 0) {
+				turns += 2;
 			}
-		};
+		}
+		switch (turns % 4) {
+		case 1:   // turn right
+			robot.facing.x = x ? 0 : y;
+			robot.facing.y = y ? 0 : -x;
+			break;
+		case 2:  // about face
+			robot.facing.x = -x;
+			robot.facing.y = -y;
+			break;
+		case 3:  // turn left
+			robot.facing.x = x ? 0 : -y;
+			robot.facing.y = y ? 0 : x;
+		}
 	}
 
-	function createCopy(maze) {
-		var maze2 = new Maze(maze.options);
-		maze2.grid = maze.grid;
-		maze2.ncolumns = maze.ncolumns;
-		maze2.startingPos = maze.startingPos;
-		maze2.facing = $.extend({}, maze.facing);
-		maze2.tokens = $.extend({}, maze.tokens);
-		maze2.pos = $.extend({}, maze.pos);
-		return maze2;
+	var Robot = function(maze) {
+		this.maze = maze;
+		this.status = ROBOT_OK;
+		this.facing = { x: -1, y: 0 };
+		this.pos = $.extend({}, maze.startingPos);
 	}
+	Robot.prototype = {
+		inMaze: function() {
+			return isWithin(this.maze, this.pos.x, this.pos.y);
+		},
+		move: function() {
+			return moveRobot(this);
+		},
+		getControls: function() {
+			var robot = this;
+			var maze = robot.maze;
+			return {
+				quit: function() {
+					robot.status = ROBOT_QUIT;
+				},
+				isFacingWall: function() {
+					return robotFacingWall(robot);
+				},
+				tokenAhead: function() {
+					return getToken(maze, robot.pos.x + robot.facing.x,
+						robot.pos.y + robot.facing.y);
+				},
+				tokenHere: function() {
+					return getToken(maze, robot.pos.x, robot.pos.y);
+				},
+				dropToken: function(token) {
+					putToken(maze, robot.pos.x, robot.pos.y, token);
+				},
+				rotate: function(turns) {
+					rotateRobot(robot, turns);
+				}
+			};
+		}
+	};
 
 	var Maze = function(options) {
 		this.options = $.extend({}, defaultOptions, options);
-		this.facing = {};
-		this.listeners = [];
-		reset(this, "");
+		this.grid = [];
+		this.ncolumns = 0;
+		this.startingPos = { x: 0, y: 0 };
+		this.tokens = {};
 	};
+	Maze.ROBOT_OK = ROBOT_OK;
+	Maze.ROBOT_SMASHED = ROBOT_SMASHED;
+	Maze.ROBOT_QUIT = ROBOT_QUIT;
 	Maze.prototype = {
 		getTitle: function() {
 			return this.options.datafile;
@@ -187,25 +203,10 @@
 			return whatsAt(this, x, y);
 		},
 		load: function() {
-			var self = this;
-			return $.ajax(self.options.datafile, {
-				method: "GET",
-				dataType: "text",
-				dataFilter: function(data) {
-					reset(self, data);
-					fireChangeEvent(self);
-					return self;
-				}
-			});
-		},
-		registerChangeListener: function(listener) {
-			registerChangeListener(this, listener);
+			return loadMaze(this);
 		},
 		getRobot: function() {
-			return createRobot(this);
-		},
-		copy: function() {
-			return createCopy(this);
+			return this.robot = new Robot(this);
 		}
 	};
 
