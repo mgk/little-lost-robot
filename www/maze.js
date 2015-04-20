@@ -110,9 +110,9 @@
 				if (maze.grid[x][y]) {
 					return false;
 				}
-				return {
-                    token: maze.tokens[positionString(maze, x, y)]
-                };
+				return { 
+					token: maze.tokens[positionString(maze, x, y)]
+				};
 			},
 
             _doRot: function() {
@@ -153,9 +153,9 @@
 				fireChangeEvent(maze);
 			},
 
-            getToken: function() {
+			getToken: function() {
 				return maze.tokens[positionString(maze, maze.pos.x, maze.pos.y)];
-            }
+			}
 		};
 	}
 

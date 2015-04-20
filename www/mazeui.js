@@ -25,13 +25,14 @@
 				});
 				for (var y = 0; y < dimensions.columns; ++y) {
 					var block = $("<td>").css({
-						width: "15px",
-						height: "15px",
+						width: "20px",
+						height: "20px",
 						border: 0,
 						overflow: "none",
 						padding: "2px",
 						margin: 0,
 						textAlign: "center",
+						fontSize: "10px",
 						color: "#ccc",
 						backgroundColor: maze.whatsAt(x, y).blocked ? "#333" : "#eee"
 					});
