@@ -3,14 +3,16 @@
 <body>
 <div id="content"></div>
 </body>
+<div style="clear: both">
+    <a href="README.md">README</a>
+</div>
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
 <script type="text/javascript" src="maze.js"></script>
 <script type="text/javascript" src="mazeui.js"></script>
-<script type="text/javascript" src="solution.js"></script>
 <script type="text/javascript">
 $(function() {
 	$("#content").MazeUI({
-		datafile: window.location.hash.substring(1) || undefined
+		datafile: window.location.search.substring(1) || undefined
 	});
 });
 </script>

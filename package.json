@@ -22,6 +22,7 @@
   },
   "homepage": "https://github.com/EchNet/little-lost-robot",
   "dependencies": {
-    "express": "^4.12.3"
+    "express": "^4.12.3",
+    "marked": "^0.3.3"
   }
 }

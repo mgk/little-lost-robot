@@ -6,17 +6,7 @@
 	var ROBOT_OK = 0;
 	var ROBOT_SMASHED = 1;
 	var ROBOT_QUIT = 2;
-
-	var defaultOptions = {
-		datafile: "maze.txt"
-	};
-
-	function trimEmpty(strings) {
-		while (strings.length > 0 && strings[strings.length - 1].trim() == ""){
-			strings = strings.slice(0, strings.length - 1);
-		}
-		return strings;
-	}
+	var ROBOT_ERROR = 3;
 
 	function maxStrLen(strings) {
 		var max = 0;
@@ -48,19 +38,15 @@
 		return bools;
 	}
 
-	function loadMaze(maze) {
-		return $.ajax(maze.options.datafile, {
-			method: "GET",
-			dataType: "text",
-			dataFilter: function(data) {
-				var rowStrings = trimEmpty(data.split(/[\n\r]+/));
-				var ncolumns = maxStrLen(rowStrings);
-				maze.startingPos = findAndRemoveStartMarker(rowStrings);
-				maze.grid = toBooleans(rowStrings, ncolumns);
-				maze.ncolumns = ncolumns;
-				return maze;
-			}
-		});
+	function parseMaze(data) {
+		var rowStrings = $.isArray(data.plan) ? data.plan : [];
+		var ncolumns = maxStrLen(rowStrings);
+		var startingPos = findAndRemoveStartMarker(rowStrings);
+		var grid = toBooleans(rowStrings, ncolumns);
+		var maze = new Maze(grid, ncolumns, startingPos);
+		maze.title = data.title || "Untitled";
+		maze.author = data.author || null;
+		return maze;
 	}
 
 	function isWithin(maze, x, y) {
@@ -85,17 +71,6 @@
 
 	function robotIsAt(maze, x, y) {
 		return maze.robot && x == maze.robot.pos.x && y == maze.robot.pos.y;
-	}
-
-	function whatsAt(maze, x, y) {
-		if (!isWithin(maze, x, y)) {
-			return null;
-		}
-		return {
-			blocked: maze.grid[x][y],
-			robot: robotIsAt(maze, x, y) ? $.extend({}, maze.robot.facing) : undefined,
-			token: getToken(maze, x, y)
-		};
 	}
 
 	function robotFacingWall(robot) {
@@ -142,6 +117,50 @@
 		}
 	}
 
+	function installGuidanceSystem(robot, initGuidanceSystem)
+	{
+		var maze = robot.maze;
+		// Here is the side of a robot that only the navigator sees.
+		var facade = {
+			title: "Untitled",
+			quit: function() {
+				robot.status = ROBOT_QUIT;
+			},
+			isFacingWall: function() {
+				return robotFacingWall(robot);
+			},
+			tokenAhead: function() {
+				return getToken(maze, robot.pos.x + robot.facing.x,
+					robot.pos.y + robot.facing.y);
+			},
+			tokenHere: function() {
+				return getToken(maze, robot.pos.x, robot.pos.y);
+			},
+			dropToken: function(token) {
+				putToken(maze, robot.pos.x, robot.pos.y, token);
+				return this;
+			},
+			rotate: function(turns) {
+				rotateRobot(robot, turns);
+				return this;
+			}
+		};
+        initGuidanceSystem.call(facade);
+
+		robot.title = facade.title;
+		robot.author = facade.author;
+		robot.description = facade.description;
+		robot.steerFunc = function() {
+			try {
+				facade.steer();
+			}
+			catch (e) {
+				robot.status = ROBOT_ERROR;
+				console.log(e);
+			}
+		};
+	}
+
 	var Robot = function(maze) {
 		this.maze = maze;
 		this.status = ROBOT_OK;
@@ -152,61 +171,47 @@
 		inMaze: function() {
 			return isWithin(this.maze, this.pos.x, this.pos.y);
 		},
+		steer: function() {
+			this.steerFunc && this.steerFunc();
+		},
 		move: function() {
 			return moveRobot(this);
-		},
-		getControls: function() {
-			var robot = this;
-			var maze = robot.maze;
-			return {
-				quit: function() {
-					robot.status = ROBOT_QUIT;
-				},
-				isFacingWall: function() {
-					return robotFacingWall(robot);
-				},
-				tokenAhead: function() {
-					return getToken(maze, robot.pos.x + robot.facing.x,
-						robot.pos.y + robot.facing.y);
-				},
-				tokenHere: function() {
-					return getToken(maze, robot.pos.x, robot.pos.y);
-				},
-				dropToken: function(token) {
-					putToken(maze, robot.pos.x, robot.pos.y, token);
-				},
-				rotate: function(turns) {
-					rotateRobot(robot, turns);
-				}
-			};
 		}
 	};
 
-	var Maze = function(options) {
-		this.options = $.extend({}, defaultOptions, options);
-		this.grid = [];
-		this.ncolumns = 0;
-		this.startingPos = { x: 0, y: 0 };
+	var Maze = function(grid, ncolumns, startingPos) {
+		this.grid = grid;
+		this.ncolumns = ncolumns;
+		this.startingPos = startingPos;
 		this.tokens = {};
 	};
 	Maze.ROBOT_OK = ROBOT_OK;
 	Maze.ROBOT_SMASHED = ROBOT_SMASHED;
 	Maze.ROBOT_QUIT = ROBOT_QUIT;
+	Maze.ROBOT_ERROR = ROBOT_ERROR;
+	Maze.parse = parseMaze;
 	Maze.prototype = {
-		getTitle: function() {
-			return this.options.datafile;
-		},
 		getDimensions: function() {
 			return { rows: this.grid.length, columns: this.ncolumns };
 		},
-		whatsAt: function(x, y) {
-			return whatsAt(this, x, y);
+		isWall: function(x, y) {
+			return isWall(this, x, y);
 		},
-		load: function() {
-			return loadMaze(this);
+		getToken: function(x, y) {
+			return getToken(this, x, y);
 		},
-		getRobot: function() {
-			return this.robot = new Robot(this);
+		clearTokens: function() {
+			this.tokens = {};
+		},
+		createRobot: function(guidanceSystem) {
+			var robot = new Robot(this);
+			if (guidanceSystem) {
+				installGuidanceSystem(robot, guidanceSystem);
+			}
+			return this.robot = robot;
+		},
+		resetRobot: function(robot) {
+			robot.pos = $.extend({}, this.startingPos);
 		}
 	};
 
