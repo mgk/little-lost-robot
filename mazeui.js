@@ -119,7 +119,7 @@
 				renderContents();
 			}
 			if (!robot.inMaze()) {
-				print("Escaped!");
+				print(robot.title + " escaped!");
 			}
 			else {
 				switch (robot.status) {
@@ -128,13 +128,13 @@
 					stepTimer = g.setTimeout(go, TICK);
 					break;
 				case Maze.ROBOT_SMASHED:
-					print("Smashed against the wall!");
+					print(robot.title + " smashed against the wall!");
 					break;
 				case Maze.ROBOT_ERROR:
 					print("Unexpected error (see console).");
 					break;
 				case Maze.ROBOT_QUIT:
-					print("Robot declares that there is no solution.");
+					print(robot.title + " declares that there is no solution.");
 					break;
 				}
 			}
@@ -240,7 +240,7 @@
 				print("Error loading /mazes: " + errorThrown);
 			});
 		}
-		
+
 		function createRobot(id) {
 			var callbackName = ("cb_" + Math.random()).replace(/\./g, "");
 			$[callbackName] = function(initFunc) {
